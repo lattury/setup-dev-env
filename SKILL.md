@@ -34,12 +34,15 @@ Set up a complete Windows dev environment on a new machine in one click.
 2. Run `npm install -g @tencent-ai/codebuddy-code`
 3. Verify with `codebuddy --version`
 
-## Step 4: Launch CodeBuddy login
+## Step 4: Configure CodeBuddy and launch login
 
-1. Auto-run `codebuddy --serve --open`
-2. Browser opens the Web UI login page automatically
-3. User selects login method (WeChat/Google/GitHub) to authenticate
-4. Once logged in, CodeBuddy is ready to use
+1. Pre-configure CodeBuddy settings to skip first-run TUI prompts:
+   - `codebuddy config set apiProvider internal` (default first option)
+   - `codebuddy config set endpoint "https://copilot.tencent.com"` (default first option)
+2. Auto-run `codebuddy --serve --open`
+3. Browser opens the Web UI login page automatically
+4. User selects login method (WeChat/Google/GitHub) to authenticate
+5. Once logged in, CodeBuddy is ready to use
 
 ## One-click deployment
 

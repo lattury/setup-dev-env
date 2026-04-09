@@ -178,15 +178,37 @@ if ($codebuddyInstalled) {
     }
 }
 
-# ========== Step 4: Launch CodeBuddy for first-time setup ==========
-Write-Host "`n--- Step 4: Launching CodeBuddy for login ---" -ForegroundColor Cyan
+# ========== Step 4: Configure CodeBuddy and launch login ==========
+Write-Host "`n--- Step 4: Configuring CodeBuddy and launching login ---" -ForegroundColor Cyan
 
 # Refresh PATH one more time
 $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 
 $cbCmd = Get-Command codebuddy -ErrorAction SilentlyContinue
 if ($cbCmd) {
-    Write-Host "Starting CodeBuddy with Web UI (auto-open browser for login)..." -ForegroundColor Green
+    # Pre-configure CodeBuddy settings to skip first-run TUI prompts
+    # Default first option: apiProvider = internal
+    # Default first option: endpoint = https://copilot.tencent.com
+    Write-Host "Pre-configuring CodeBuddy (selecting default options)..." -ForegroundColor Yellow
+    "[$(Get-Date)] Pre-configuring CodeBuddy settings" | Out-File $LogPath -Append
+
+    try {
+        & codebuddy config set apiProvider internal 2>&1 | Out-Null
+        "[$(Get-Date)] Set apiProvider=internal" | Out-File $LogPath -Append
+    } catch {
+        Write-Host "[WARN] Could not set apiProvider: $_" -ForegroundColor Yellow
+        "[$(Get-Date)] WARN: could not set apiProvider" | Out-File $LogPath -Append
+    }
+
+    try {
+        & codebuddy config set endpoint "https://copilot.tencent.com" 2>&1 | Out-Null
+        "[$(Get-Date)] Set endpoint=https://copilot.tencent.com" | Out-File $LogPath -Append
+    } catch {
+        Write-Host "[WARN] Could not set endpoint: $_" -ForegroundColor Yellow
+        "[$(Get-Date)] WARN: could not set endpoint" | Out-File $LogPath -Append
+    }
+
+    Write-Host "Configuration complete. Launching CodeBuddy Web UI for login..." -ForegroundColor Green
     "[$(Get-Date)] Launching codebuddy --serve --open" | Out-File $LogPath -Append
     Start-Process codebuddy -ArgumentList "--serve","--open"
     Write-Host "CodeBuddy launched! A browser window will open for login." -ForegroundColor Green
