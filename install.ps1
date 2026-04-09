@@ -1,6 +1,6 @@
 # Dev Environment One-Click Setup Script
 # For OpenClaw setup-dev-env skill
-# Requires Administrator privileges
+# Auto-elevates to Administrator, auto-downloads installers from GitHub if missing
 
 param(
     [string]$LogPath = "$env:TEMP\setup-dev-env.log"
@@ -12,11 +12,41 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit 0
 }
 
-# Get script directory (installers are in the same folder)
+# Get script directory (installers may be in the same folder)
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# GitHub Release URL for downloading offline installers
+$releaseBase = "https://github.com/lattury/setup-dev-env/releases/download/v1.0.0"
 
 "[$(Get-Date)] Dev environment setup started" | Out-File $LogPath -Append
 Write-Host "=== Dev Environment Setup ===" -ForegroundColor Cyan
+
+# Helper: download file if not found locally
+function Get-Installer {
+    param(
+        [string]$FileName,
+        [string]$LocalDir
+    )
+    $localPath = Join-Path $LocalDir $FileName
+    if (Test-Path $localPath) {
+        Write-Host "  Found local: $FileName" -ForegroundColor Green
+        return $localPath
+    }
+    # Download from GitHub Release
+    $url = "$releaseBase/$FileName"
+    Write-Host "  Local file not found, downloading from GitHub: $url" -ForegroundColor Yellow
+    "[$(Get-Date)] Downloading $FileName from GitHub" | Out-File $LogPath -Append
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $localPath -UseBasicParsing
+        Write-Host "  Download complete: $localPath" -ForegroundColor Green
+        "[$(Get-Date)] Downloaded $FileName" | Out-File $LogPath -Append
+        return $localPath
+    } catch {
+        Write-Host "[ERROR] Failed to download $FileName : $_" -ForegroundColor Red
+        "[$(Get-Date)] ERROR: download failed for $FileName" | Out-File $LogPath -Append
+        return $null
+    }
+}
 
 # ========== Step 1: Check and install Node.js ==========
 Write-Host "`n--- Step 1: Checking Node.js ---" -ForegroundColor Cyan
@@ -29,10 +59,9 @@ if ($nodeInstalled) {
 } else {
     Write-Host "Node.js not found, installing silently..." -ForegroundColor Yellow
 
-    $nodeInstaller = Join-Path $scriptDir "node-v24.14.0-x64.msi"
-    if (-not (Test-Path $nodeInstaller)) {
-        Write-Host "[ERROR] Node.js installer not found: $nodeInstaller" -ForegroundColor Red
-        "[$(Get-Date)] ERROR: Node.js installer not found" | Out-File $LogPath -Append
+    $nodeInstaller = Get-Installer -FileName "node-v24.14.0-x64.msi" -LocalDir $scriptDir
+    if (-not $nodeInstaller) {
+        Write-Host "[ERROR] Cannot proceed without Node.js installer" -ForegroundColor Red
         exit 1
     }
 
@@ -71,10 +100,9 @@ if ($gitInstalled) {
 } else {
     Write-Host "Git not found, installing silently..." -ForegroundColor Yellow
 
-    $gitInstaller = Join-Path $scriptDir "Git-2.53.0.2-64-bit.exe"
-    if (-not (Test-Path $gitInstaller)) {
-        Write-Host "[ERROR] Git installer not found: $gitInstaller" -ForegroundColor Red
-        "[$(Get-Date)] ERROR: Git installer not found" | Out-File $LogPath -Append
+    $gitInstaller = Get-Installer -FileName "Git-2.53.0.2-64-bit.exe" -LocalDir $scriptDir
+    if (-not $gitInstaller) {
+        Write-Host "[ERROR] Cannot proceed without Git installer" -ForegroundColor Red
         exit 1
     }
 
@@ -158,41 +186,14 @@ $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [En
 
 $cbCmd = Get-Command codebuddy -ErrorAction SilentlyContinue
 if ($cbCmd) {
-    $cbPath = $cbCmd.Source
-    Write-Host "Found codebuddy at: $cbPath" -ForegroundColor Green
     Write-Host "Starting CodeBuddy with Web UI (auto-open browser for login)..." -ForegroundColor Green
-    "[$(Get-Date)] Launching codebuddy --serve --open from $cbPath" | Out-File $LogPath -Append
-
-    # Use full path to avoid PATH issues in admin session
-    # Launch as current user (non-elevated) so browser opens properly
-    Start-Process $cbPath -ArgumentList "--serve","--open"
-
+    "[$(Get-Date)] Launching codebuddy --serve --open" | Out-File $LogPath -Append
+    Start-Process codebuddy -ArgumentList "--serve","--open"
     Write-Host "CodeBuddy launched! A browser window will open for login." -ForegroundColor Green
     Write-Host "Select your preferred login method in the browser to complete setup." -ForegroundColor White
 } else {
-    # Fallback: try common npm global paths
-    $npmPaths = @(
-        "$env:APPDATA\npm\codebuddy.cmd",
-        "$env:APPDATA\npm\codebuddy",
-        "$HOME\AppData\Roaming\npm\codebuddy.cmd"
-    )
-    $found = $false
-    foreach ($p in $npmPaths) {
-        if (Test-Path $p) {
-            Write-Host "Found codebuddy at: $p" -ForegroundColor Green
-            Write-Host "Starting CodeBuddy with Web UI (auto-open browser for login)..." -ForegroundColor Green
-            "[$(Get-Date)] Launching codebuddy --serve --open from $p" | Out-File $LogPath -Append
-            Start-Process $p -ArgumentList "--serve","--open"
-            Write-Host "CodeBuddy launched! A browser window will open for login." -ForegroundColor Green
-            Write-Host "Select your preferred login method in the browser to complete setup." -ForegroundColor White
-            $found = $true
-            break
-        }
-    }
-    if (-not $found) {
-        Write-Host "[WARN] codebuddy command not found. Please restart terminal and run: codebuddy --serve --open" -ForegroundColor Yellow
-        "[$(Get-Date)] WARN: codebuddy not found, skip launch" | Out-File $LogPath -Append
-    }
+    Write-Host "[WARN] codebuddy command not found. Please restart terminal and run: codebuddy --serve --open" -ForegroundColor Yellow
+    "[$(Get-Date)] WARN: codebuddy not found, skip launch" | Out-File $LogPath -Append
 }
 
 # ========== Done ==========
